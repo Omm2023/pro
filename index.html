@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Filter Tool</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-hover: #222632;
+            --border: #2a2e3b;
+            --text: #e4e6ed;
+            --text-muted: #8b8fa3;
+            --accent: #4f8cff;
+            --accent-glow: rgba(79, 140, 255, 0.15);
+            --success: #34d399;
+            --success-bg: rgba(52, 211, 153, 0.1);
+            --error: #f87171;
+            --error-bg: rgba(248, 113, 113, 0.1);
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image:
+                linear-gradient(rgba(79, 140, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(79, 140, 255, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: -200px; right: -200px;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(79, 140, 255, 0.08), transparent 70%);
+            pointer-events: none;
+        }
+
+        .container { max-width: 560px; width: 100%; position: relative; z-index: 1; }
+
+        .header { text-align: center; margin-bottom: 2.5rem; }
+
+        .logo {
+            display: inline-flex;
+            align-items: center; justify-content: center;
+            width: 56px; height: 56px;
+            background: var(--accent-glow);
+            border: 1px solid rgba(79, 140, 255, 0.2);
+            border-radius: 14px;
+            margin-bottom: 1.25rem;
+        }
+
+        .logo svg { width: 28px; height: 28px; stroke: var(--accent); }
+
+        .header h1 {
+            font-size: 1.75rem; font-weight: 700;
+            letter-spacing: -0.02em; margin-bottom: 0.5rem;
+        }
+
+        .header p { color: var(--text-muted); font-size: 0.95rem; line-height: 1.5; }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Upload zone */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .upload-zone svg {
+            width: 40px; height: 40px;
+            stroke: var(--text-muted);
+            margin-bottom: 1rem;
+            transition: stroke 0.25s ease;
+        }
+
+        .upload-zone:hover svg { stroke: var(--accent); }
+        .upload-zone h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.35rem; }
+        .upload-zone span { font-size: 0.85rem; color: var(--text-muted); }
+        .upload-zone .browse { color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+        .file-input { display: none; }
+
+        /* File info */
+        .file-info {
+            display: none;
+            align-items: center; gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            background: var(--surface-hover);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-top: 1.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+        }
+
+        .file-info.show { display: flex; }
+
+        .file-info svg { width: 20px; height: 20px; stroke: var(--success); flex-shrink: 0; }
+        .file-info .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-info .remove { cursor: pointer; color: var(--text-muted); padding: 2px; transition: color 0.2s; }
+        .file-info .remove:hover { color: var(--error); }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center; justify-content: center; gap: 0.5rem;
+            width: 100%;
+            padding: 0.85rem 1.5rem;
+            border: none; border-radius: 10px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.95rem; font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 1.25rem;
+            text-decoration: none;
+        }
+
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: #3d7bf0; box-shadow: 0 0 24px rgba(79, 140, 255, 0.25); }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+        .btn-success { background: var(--success); color: #0f1117; }
+        .btn-success:hover { background: #2cc48d; box-shadow: 0 0 24px rgba(52, 211, 153, 0.25); }
+
+        .btn svg { width: 18px; height: 18px; }
+
+        /* Status messages */
+        .message {
+            padding: 0.85rem 1.15rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            margin-bottom: 1.25rem;
+            display: none;
+            align-items: center; gap: 0.6rem;
+        }
+
+        .message.show { display: flex; }
+        .message-success { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
+        .message-error { background: var(--error-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--error); }
+
+        /* Download area */
+        .download-area { display: none; margin-bottom: 1.5rem; }
+        .download-area.show { display: block; }
+
+        /* Mapping */
+        .mapping-title {
+            font-size: 0.8rem; font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.75rem;
+        }
+
+        .mapping-row {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.45rem 0; font-size: 0.85rem;
+        }
+
+        .col-name {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+            color: var(--accent); background: var(--accent-glow);
+            padding: 0.2rem 0.5rem; border-radius: 5px;
+        }
+
+        .arrow { color: var(--text-muted); font-size: 0.75rem; }
+        .col-output { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--success); }
+        .empty-tag { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+
+        .spinner {
+            display: none;
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .footer { text-align: center; margin-top: 1.5rem; color: var(--text-muted); font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+            </div>
+            <h1>Excel Filter Tool</h1>
+            <p>Upload your raw Excel file and download a clean, filtered version with only the columns you need.</p>
+        </div>
+
+        <!-- Status Message -->
+        <div class="message" id="statusMessage">
+            <span id="statusIcon"></span>
+            <span id="statusText"></span>
+        </div>
+
+        <!-- Download Area -->
+        <div class="download-area" id="downloadArea">
+            <a class="btn btn-success" id="downloadBtn" href="#">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span id="downloadText">Download Filtered Excel</span>
+            </a>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="card">
+            <div class="upload-zone" id="dropZone">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <h3>Drop your Excel file here</h3>
+                <span>or <span class="browse">browse</span> to choose — .xlsx, .xls</span>
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span class="name" id="fileName"></span>
+                <span class="remove" id="removeFile">✕</span>
+            </div>
+
+            <button class="btn btn-primary" id="submitBtn" disabled>
+                <span id="btnText">Filter & Download</span>
+                <div class="spinner" id="spinner"></div>
+            </button>
+        </div>
+
+        <!-- Column Mapping -->
+        <div class="card">
+            <div class="mapping-title">Output Columns</div>
+            <div class="mapping-row">
+                <span class="col-name">fsn</span>
+                <span class="arrow">→</span>
+                <span class="col-output">fsn</span>
+            </div>
+            <div class="mapping-row">
+                <span class="col-name">dispatch_warehouse_id</span>
+                <span class="arrow">→</span>
+                <span class="col-output">Warehouse id</span>
+            </div>
+            <div class="mapping-row">
+                <span class="col-output">Location</span>
+                <span class="empty-tag">(empty column)</span>
+            </div>
+            <div class="mapping-row">
+                <span class="col-name">product_vertical</span>
+                <span class="arrow">→</span>
+                <span class="col-output">product_vertical</span>
+            </div>
+            <div class="mapping-row">
+                <span class="col-name">storage_location_label</span>
+                <span class="arrow">→</span>
+                <span class="col-output">storage_location_label</span>
+            </div>
+        </div>
+
+        <div class="footer">Upload → Filter → Download. Simple as that.</div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const removeFile = document.getElementById('removeFile');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const spinner = document.getElementById('spinner');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusIcon = document.getElementById('statusIcon');
+        const statusText = document.getElementById('statusText');
+        const downloadArea = document.getElementById('downloadArea');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadText = document.getElementById('downloadText');
+
+        let selectedFile = null;
+
+        // Click to browse
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Drag & drop
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                selectedFile = e.dataTransfer.files[0];
+                handleFile(selectedFile);
+            }
+        });
+
+        // File selected
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) {
+                selectedFile = fileInput.files[0];
+                handleFile(selectedFile);
+            }
+        });
+
+        function handleFile(file) {
+            fileName.textContent = file.name;
+            fileInfo.classList.add('show');
+            submitBtn.disabled = false;
+            hideStatus();
+            downloadArea.classList.remove('show');
+        }
+
+        // Remove file
+        removeFile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.value = '';
+            selectedFile = null;
+            fileInfo.classList.remove('show');
+            submitBtn.disabled = true;
+        });
+
+        // Submit
+        submitBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            btnText.textContent = 'Processing...';
+            spinner.style.display = 'block';
+            submitBtn.disabled = true;
+            hideStatus();
+            downloadArea.classList.remove('show');
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus('success', `✅ Filtered successfully — ${data.rows} rows processed`);
+                    downloadBtn.href = data.download_url;
+                    downloadText.textContent = `Download Filtered Excel (${data.rows} rows)`;
+                    downloadArea.classList.add('show');
+                } else {
+                    showStatus('error', `❌ ${data.error}`);
+                }
+            } catch (err) {
+                showStatus('error', `❌ Connection error: ${err.message}`);
+            }
+
+            btnText.textContent = 'Filter & Download';
+            spinner.style.display = 'none';
+            submitBtn.disabled = false;
+        });
+
+        function showStatus(type, text) {
+            statusMessage.className = `message show message-${type}`;
+            statusText.textContent = text;
+        }
+
+        function hideStatus() {
+            statusMessage.className = 'message';
+        }
+    </script>
+</body>
+</html>
